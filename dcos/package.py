@@ -1384,6 +1384,31 @@ class Package():
         pkg_versions.sort()
         return pkg_versions[-1]
 
+    def get_package_revision(self, package_version=None):
+        """Returns the most recent package revision, for a
+        given package version if specified.
+
+        :param package_version: a given package version
+        :type package_version: str
+        :returns: package revision
+        :rtype: int
+        """
+
+        if package_version:
+            software_versions = self.software_versions()
+            revision = next(
+                (pkg_ver for pkg_ver
+                    in reversed(software_versions)
+                    if software_versions[pkg_ver] == package_version), None)
+            if not revision:
+                raise DCOSException(
+                    "No package with version {} available".format(
+                        package_version))
+        else:
+            revision = self.latest_version()
+
+        return revision
+
     def __repr__(self):
 
         v, error = self.latest_version()

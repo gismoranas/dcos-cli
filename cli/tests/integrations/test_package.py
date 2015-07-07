@@ -82,7 +82,8 @@ Usage:
     dcos package --info
     dcos package describe [--app --options=<file> --cli] <package_name>
     dcos package install [--cli | [--app --app-id=<app_id>]]
-                         [--options=<file> --yes] <package_name>
+                         [--package-version=<package_version>]
+                         [--options=<file>] [--yes] <package_name>
     dcos package list [--json --endpoints --app-id=<app-id> <package_name>]
     dcos package search [--json <query>]
     dcos package sources
@@ -91,18 +92,24 @@ Usage:
     dcos package update [--validate]
 
 Options:
-    -h, --help         Show this screen
-    --info             Show a short description of this subcommand
-    --version          Show version
-    --yes              Assume "yes" is the answer to all prompts and run
-                       non-interactively
-    --all              Apply the operation to all matching packages
-    --app              Apply the operation only to the package's application
-    --app-id=<app-id>  The application id
-    --cli              Apply the operation only to the package's CLI
-    --options=<file>   Path to a JSON file containing package installation
-                       options
-    --validate         Validate package content when updating sources
+    -h, --help                          Show this screen
+    --info                              Show a short description of this
+                                        subcommand
+    --version                           Show version
+    --yes                               Assume "yes" is the answer to all
+                                        prompts and run non-interactively
+    --all                               Apply the operation to all matching
+                                        packages
+    --app                               Apply the operation only to the
+                                        package's application
+    --app-id=<app-id>                   The application id
+    --cli                               Apply the operation only to the
+                                        package's CLI
+    --options=<file>                    Path to a JSON file containing package
+                                        installation options
+    --validate                          Validate package content when updating
+                                        sources
+    --package-version=<package_version> Package version to install
 
 Configuration:
     [package]
@@ -222,6 +229,28 @@ def test_install_missing_options_file():
         stdout=b'We recommend a minimum of one node with at least 1 CPU and '
                b'2GB of RAM available for the Chronos Service.\n',
         stderr=b"Error opening file [asdf.json]: No such file or directory\n")
+
+
+def test_install_specific_version():
+    stdout = (b'We recommend a minimum of one node with at least 2 ',
+              b'CPU\'s and 1GB of RAM available for the Marathon Service.\n',
+              b'Installing package [marathon] version [0.8.1]\n',
+              b'Marathon DCOS Service has been successfully installed!\n',
+              b'\tDocumentation: https://mesosphere.github.io/marathon\n',
+              b'\tIssues: https://github.com/mesosphere/marathon/issues\n\n')
+
+    _package('marathon',
+             stdout=stdout,
+             args=['--yes', '--package-version=0.8.1'])
+
+
+def test_install_bad_sw_version():
+    stderr = b'No package with version a.b.c available\n'
+    assert_command(
+        ['dcos', 'package', 'install', 'helloworld',
+         '--package-version=a.b.c'],
+        returncode=1,
+        stderr=stderr)
 
 
 def test_package_metadata():
@@ -679,7 +708,8 @@ A sample post-installation message
 
 @contextlib.contextmanager
 def _package(name,
-             stdout=b''):
+             stdout=b'',
+             args=['--yes']):
     """Context manager that deploys an app on entrance, and removes it on
     exit.
 

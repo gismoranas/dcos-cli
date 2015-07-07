@@ -5,7 +5,8 @@ Usage:
     dcos package --info
     dcos package describe [--app --options=<file> --cli] <package_name>
     dcos package install [--cli | [--app --app-id=<app_id>]]
-                         [--options=<file> --yes] <package_name>
+                         [--package-version=<package_version>]
+                         [--options=<file>] [--yes] <package_name>
     dcos package list [--json --endpoints --app-id=<app-id> <package_name>]
     dcos package search [--json <query>]
     dcos package sources
@@ -14,18 +15,24 @@ Usage:
     dcos package update [--validate]
 
 Options:
-    -h, --help         Show this screen
-    --info             Show a short description of this subcommand
-    --version          Show version
-    --yes              Assume "yes" is the answer to all prompts and run
-                       non-interactively
-    --all              Apply the operation to all matching packages
-    --app              Apply the operation only to the package's application
-    --app-id=<app-id>  The application id
-    --cli              Apply the operation only to the package's CLI
-    --options=<file>   Path to a JSON file containing package installation
-                       options
-    --validate         Validate package content when updating sources
+    -h, --help                          Show this screen
+    --info                              Show a short description of this
+                                        subcommand
+    --version                           Show version
+    --yes                               Assume "yes" is the answer to all
+                                        prompts and run non-interactively
+    --all                               Apply the operation to all matching
+                                        packages
+    --app                               Apply the operation only to the
+                                        package's application
+    --app-id=<app-id>                   The application id
+    --cli                               Apply the operation only to the
+                                        package's CLI
+    --options=<file>                    Path to a JSON file containing package
+                                        installation options
+    --validate                          Validate package content when updating
+                                        sources
+    --package-version=<package_version> Package version to install
 
 Configuration:
     [package]
@@ -103,8 +110,8 @@ def _cmds():
 
         cmds.Command(
             hierarchy=['package', 'install'],
-            arg_keys=['<package_name>', '--options', '--app-id', '--cli',
-                      '--app', '--yes'],
+            arg_keys=['<package_name>', '--package-version', '--options',
+                      '--app-id', '--cli', '--app', '--yes'],
             function=_install),
 
         cmds.Command(
@@ -276,11 +283,14 @@ def _confirm(prompt, yes):
                     "'{}' is not a valid response.".format(response))
 
 
-def _install(package_name, options_path, app_id, cli, app, yes):
+def _install(package_name, package_version, options_path, app_id, cli, app,
+             yes):
     """Install the specified package.
 
     :param package_name: the package to install
     :type package_name: str
+    :param package_version: package version to install
+    :type package_version: str
     :param options_path: path to file containing option values
     :type options_path: str
     :param app_id: app ID for installation of this package
@@ -308,10 +318,9 @@ def _install(package_name, options_path, app_id, cli, app, yes):
               "repositories"
         raise DCOSException(msg)
 
-    # TODO(CD): Make package version to install configurable
-    pkg_version = pkg.latest_version()
+    pkg_revision = pkg.get_package_revision(package_version)
 
-    pre_install_notes = pkg.package_json(pkg_version).get('preInstallNotes')
+    pre_install_notes = pkg.package_json(pkg_revision).get('preInstallNotes')
     if pre_install_notes:
         emitter.publish(pre_install_notes)
         if not _confirm('Continue installing?', yes):
@@ -320,12 +329,12 @@ def _install(package_name, options_path, app_id, cli, app, yes):
 
     user_options = _user_options(options_path)
 
-    options = pkg.options(pkg_version, user_options)
+    options = pkg.options(pkg_revision, user_options)
 
-    if app and pkg.has_marathon_definition(pkg_version):
+    if app and pkg.has_marathon_definition(pkg_revision):
         # Install in Marathon
         version_map = pkg.software_versions()
-        sw_version = version_map.get(pkg_version, '?')
+        sw_version = version_map.get(pkg_revision, '?')
 
         message = 'Installing package [{}] version [{}]'.format(
             pkg.name(), sw_version)
@@ -338,17 +347,17 @@ def _install(package_name, options_path, app_id, cli, app, yes):
 
         package.install_app(
             pkg,
-            pkg_version,
+            pkg_revision,
             init_client,
             options,
             app_id)
 
-    if cli and pkg.has_command_definition(pkg_version):
+    if cli and pkg.has_command_definition(pkg_revision):
         # Install subcommand
         emitter.publish('Installing CLI subcommand for package [{}]'.format(
             pkg.name()))
 
-        subcommand.install(pkg, pkg_version, options)
+        subcommand.install(pkg, pkg_revision, options)
 
         subcommand_paths = subcommand.get_package_commands(package_name)
         new_commands = [os.path.basename(p).replace('-', ' ', 1)
@@ -360,7 +369,7 @@ def _install(package_name, options_path, app_id, cli, app, yes):
             emitter.publish("New command{} available: {}".format(plural,
                                                                  commands))
 
-    post_install_notes = pkg.package_json(pkg_version).get('postInstallNotes')
+    post_install_notes = pkg.package_json(pkg_revision).get('postInstallNotes')
     if post_install_notes:
         emitter.publish(post_install_notes)
 
