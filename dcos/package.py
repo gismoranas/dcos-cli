@@ -1006,7 +1006,7 @@ class Registry():
         """Validates a package registry.
 
         :returns: Validation errors
-        :rtype: [Error]
+        :rtype: [str]
         """
 
         # TODO(CD): implement these checks in pure Python?
@@ -1022,8 +1022,7 @@ class Registry():
                                            '1-validate-packages.sh')
             result = subprocess.call(validate_script)
         if result is not 0:
-            return [Error(
-                'Source tree is not valid [{}]'.format(self._base_path))]
+            return ["Source tree is not valid [{}]".format(self._base_path)]
         else:
             return []
 
